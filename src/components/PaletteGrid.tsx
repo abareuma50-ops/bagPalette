@@ -45,13 +45,7 @@ export function PaletteGrid({
 }: PaletteGridProps) {
   const selectedCount = selectedIds.length;
   const modeLabel =
-    paletteMode === "ai_rakuten"
-      ? "楽天API検索"
-      : paletteMode === "rakuten_live"
-        ? "楽天ライブ検索"
-        : paletteMode === "ai_fallback"
-          ? "AI提案"
-          : undefined;
+    paletteMode === "gemini_grounded" ? "Google検索 × Gemini" : undefined;
 
   return (
     <section

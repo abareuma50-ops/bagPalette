@@ -44,8 +44,7 @@ export function BagPaletteApp() {
   const [userMemo, setUserMemo] = useState<string>("");
   const [apiKeys, setApiKeys] = useState<{
     geminiApiKey: string;
-    rakutenAppId: string;
-  }>({ geminiApiKey: "", rakutenAppId: "" });
+  }>({ geminiApiKey: "" });
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [paletteMode, setPaletteMode] = useState<
     PaletteApiResponse["mode"] | undefined
@@ -55,6 +54,9 @@ export function BagPaletteApp() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [notice, setNotice] = useState<string | undefined>(undefined);
+  const [errorMessage, setErrorMessage] = useState<string | undefined>(
+    undefined
+  );
 
   // Hydrate from localStorage on mount
   useEffect(() => {
@@ -135,6 +137,7 @@ export function BagPaletteApp() {
     ) => {
       setIsLoading(true);
       setNotice(undefined);
+      setErrorMessage(undefined);
       try {
         const payload: PaletteApiRequest = {
           filters: customFilters ?? filters,
@@ -144,8 +147,7 @@ export function BagPaletteApp() {
           rejectedBagsFromPreviousRound: rejectedFromPrev,
           currentProfile: preferenceProfile,
           userMemo,
-          apiKeys:
-            apiKeys.geminiApiKey || apiKeys.rakutenAppId ? apiKeys : undefined,
+          apiKeys: apiKeys.geminiApiKey ? apiKeys : undefined,
         };
 
         const res = await fetch("/api/palette", {
@@ -154,18 +156,20 @@ export function BagPaletteApp() {
           body: JSON.stringify(payload),
         });
 
+        const data = (await res.json()) as PaletteApiResponse & {
+          error?: string;
+        };
+
         if (!res.ok) {
-          throw new Error("API error");
+          throw new Error(data.error || "AI検索に失敗しました。");
         }
 
-        const data = (await res.json()) as PaletteApiResponse;
         setCurrentBags(data.bags);
         setPreferenceProfile(data.updatedProfile);
         setPaletteMode(data.mode);
         setSelectedIds([]);
         setNotice(data.notice);
 
-        // Record ALL shown bags into excludedProductIds & excludedModelNames immediately
         if (data.bags.length > 0) {
           const newIds = data.bags.map((b) => b.id);
           const newNames = data.bags.map((b) =>
@@ -182,7 +186,11 @@ export function BagPaletteApp() {
         setStage("grid");
       } catch (err) {
         console.error(err);
-        setNotice("通信エラーが発生しました。もう一度お試しください。");
+        setErrorMessage(
+          err instanceof Error
+            ? err.message
+            : "通信エラーが発生しました。もう一度お試しください。"
+        );
       } finally {
         setIsLoading(false);
       }
@@ -305,9 +313,9 @@ export function BagPaletteApp() {
               id="open-api-settings-btn"
               type="button"
               onClick={() => setShowKeyModal(true)}
-              title="APIキー設定（楽天・Gemini）"
+              title="Gemini APIキー設定"
               className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
-                apiKeys.rakutenAppId || apiKeys.geminiApiKey
+                apiKeys.geminiApiKey
                   ? "bg-white text-[#C8556F] shadow-sm"
                   : "text-[#8E6D77] hover:bg-white/60"
               }`}
@@ -320,6 +328,28 @@ export function BagPaletteApp() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col">
+        {errorMessage && (
+          <div
+            id="api-error-banner"
+            role="alert"
+            className="w-full max-w-md mx-auto px-3.5 pt-2"
+          >
+            <div className="rounded-2xl bg-[#FFF0F3] border border-[#F2A7B8] px-3.5 py-2.5 text-xs text-[#9E2A47] flex items-start justify-between gap-2 shadow-sm">
+              <div className="space-y-1">
+                <p className="font-bold">エラーが発生しました</p>
+                <p className="leading-relaxed">{errorMessage}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setErrorMessage(undefined)}
+                className="text-[#9E2A47] hover:opacity-70 shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {activeTab === "favorites" ? (
           <FavoritesView
             favorites={favoriteBags}
@@ -354,14 +384,14 @@ export function BagPaletteApp() {
         )}
       </main>
 
-      {/* Optional API Key Modal */}
+      {/* Optional Gemini API Key Modal */}
       {showKeyModal && (
         <div className="fixed inset-0 z-50 bg-[#4A353B]/35 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="w-full max-w-sm rounded-[24px] bg-[#FFFDFD] border border-[#E8D5E2] p-5 shadow-xl space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-[#4A353B] flex items-center gap-1.5">
                 <KeyRound className="w-4 h-4 text-[#E87A90]" />
-                <span>APIキー設定（任意）</span>
+                <span>Gemini APIキー設定</span>
               </h3>
               <button
                 type="button"
@@ -372,43 +402,21 @@ export function BagPaletteApp() {
               </button>
             </div>
             <p className="text-[11px] text-[#7D636B] leading-relaxed">
-              楽天市場の公式APIやGemini 3.5 Flashを使う場合に入力してください（端末のブラウザ内にのみ保存されます）。
+              サーバー側環境変数（GEMINI_API_KEY）が未設定の場合、こちらに入力するとブラウザ内に保存してGoogle検索グラウンディングを実行できます。
             </p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-bold text-[#5E444B] mb-1">
-                  楽天アプリケーションID（RAKUTEN_APP_ID）
-                </label>
-                <input
-                  type="text"
-                  value={apiKeys.rakutenAppId}
-                  onChange={(e) =>
-                    setApiKeys((prev) => ({
-                      ...prev,
-                      rakutenAppId: e.target.value,
-                    }))
-                  }
-                  placeholder="例: 10xxxxxxxxxxxxxxx"
-                  className="w-full px-3 py-2 rounded-xl border border-[#E8D5E2] text-xs focus:outline-none focus:border-[#E87A90]"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold text-[#5E444B] mb-1">
-                  Gemini APIキー（GEMINI_API_KEY）
-                </label>
-                <input
-                  type="password"
-                  value={apiKeys.geminiApiKey}
-                  onChange={(e) =>
-                    setApiKeys((prev) => ({
-                      ...prev,
-                      geminiApiKey: e.target.value,
-                    }))
-                  }
-                  placeholder="AIza..."
-                  className="w-full px-3 py-2 rounded-xl border border-[#E8D5E2] text-xs focus:outline-none focus:border-[#E87A90]"
-                />
-              </div>
+            <div>
+              <label className="block text-[11px] font-bold text-[#5E444B] mb-1">
+                Gemini APIキー（GEMINI_API_KEY）
+              </label>
+              <input
+                type="password"
+                value={apiKeys.geminiApiKey}
+                onChange={(e) =>
+                  setApiKeys({ geminiApiKey: e.target.value })
+                }
+                placeholder="AIza... または AQ..."
+                className="w-full px-3 py-2 rounded-xl border border-[#E8D5E2] text-xs focus:outline-none focus:border-[#E87A90]"
+              />
             </div>
             <button
               type="button"

@@ -41,7 +41,7 @@ export interface BagItem {
   description: string;
   dimensions: string;
   weight: string;
-  source: "rakuten" | "fallback";
+  source: "gemini_grounded";
 }
 
 export interface RoundRecord {
@@ -78,14 +78,13 @@ export interface PaletteApiRequest {
   userMemo: string;
   apiKeys?: {
     geminiApiKey?: string;
-    rakutenAppId?: string;
   };
 }
 
 export interface PaletteApiResponse {
   bags: BagItem[];
   updatedProfile: PreferenceProfile;
-  mode: "ai_rakuten" | "rakuten_live" | "ai_fallback" | "simulation";
+  mode: "gemini_grounded";
   notice?: string;
 }
 

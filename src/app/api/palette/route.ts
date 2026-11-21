@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generatePaletteResponse } from "@/lib/paletteEngine";
+import { PaletteApiError, generatePaletteResponse } from "@/lib/paletteEngine";
 import { PaletteApiRequest } from "@/types/bag";
 
 export async function POST(request: NextRequest) {
@@ -8,10 +8,17 @@ export async function POST(request: NextRequest) {
     const result = await generatePaletteResponse(body);
     return NextResponse.json(result);
   } catch (error) {
+    if (error instanceof PaletteApiError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status }
+      );
+    }
+    const message =
+      error instanceof Error && error.message
+        ? `AI検索中にエラーが発生しました: ${error.message}`
+        : "パレットの生成に失敗しました。";
     console.error("[/api/palette] Error:", error);
-    return NextResponse.json(
-      { error: "パレットの生成に失敗しました。" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
