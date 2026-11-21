@@ -9,7 +9,7 @@ import {
   SlidersHorizontal,
   Sparkles,
 } from "lucide-react";
-import { BagItem, PreferenceProfile } from "@/types/bag";
+import { BagItem, PaletteApiResponse, PreferenceProfile } from "@/types/bag";
 import { PreferenceDrawer } from "./PreferenceDrawer";
 
 interface PaletteGridProps {
@@ -20,6 +20,7 @@ interface PaletteGridProps {
   userMemo: string;
   isLoading: boolean;
   notice?: string;
+  paletteMode?: PaletteApiResponse["mode"];
   onToggleSelect: (id: string) => void;
   onToggleFavorite: (bag: BagItem) => void;
   onNextRound: () => void;
@@ -35,6 +36,7 @@ export function PaletteGrid({
   userMemo,
   isLoading,
   notice,
+  paletteMode,
   onToggleSelect,
   onToggleFavorite,
   onNextRound,
@@ -42,6 +44,14 @@ export function PaletteGrid({
   onChangeFilters,
 }: PaletteGridProps) {
   const selectedCount = selectedIds.length;
+  const modeLabel =
+    paletteMode === "ai_rakuten"
+      ? "楽天API検索"
+      : paletteMode === "rakuten_live"
+        ? "楽天ライブ検索"
+        : paletteMode === "ai_fallback"
+          ? "AI提案"
+          : undefined;
 
   return (
     <section
@@ -57,20 +67,27 @@ export function PaletteGrid({
 
       {/* Compact Eyeshadow Palette Case */}
       <div className="palette-case rounded-[26px] border border-[#E2C8D4] p-2.5 sm:p-3.5 space-y-2.5">
-        <div className="flex items-center justify-between px-1">
-          <p className="text-[11px] font-bold text-[#7A5460] flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-[#D8B48A]" />
-            <span>直感で「好き」をタップ（複数OK）</span>
+        <div className="flex items-center justify-between px-1 gap-1.5">
+          <p className="text-[11px] font-bold text-[#7A5460] flex items-center gap-1 min-w-0 truncate">
+            <Sparkles className="w-3.5 h-3.5 text-[#D8B48A] shrink-0" />
+            <span className="truncate">直感で「好き」をタップ（複数OK）</span>
           </p>
-          <button
-            id="change-filters-btn"
-            type="button"
-            onClick={onChangeFilters}
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-[#965C6E] bg-white/80 hover:bg-white px-2.5 py-1 rounded-full border border-[#E8D5E2] transition-colors"
-          >
-            <SlidersHorizontal className="w-3 h-3" />
-            <span>条件変更</span>
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {modeLabel && (
+              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-white/80 text-[#A46B7A] border border-[#E8D5E2]">
+                {modeLabel}
+              </span>
+            )}
+            <button
+              id="change-filters-btn"
+              type="button"
+              onClick={onChangeFilters}
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-[#965C6E] bg-white/80 hover:bg-white px-2.5 py-1 rounded-full border border-[#E8D5E2] transition-colors"
+            >
+              <SlidersHorizontal className="w-3 h-3" />
+              <span>条件変更</span>
+            </button>
+          </div>
         </div>
 
         {notice && (

@@ -76,12 +76,16 @@ export interface PaletteApiRequest {
   rejectedBagsFromPreviousRound: BagItem[];
   currentProfile: PreferenceProfile;
   userMemo: string;
+  apiKeys?: {
+    geminiApiKey?: string;
+    rakutenAppId?: string;
+  };
 }
 
 export interface PaletteApiResponse {
   bags: BagItem[];
   updatedProfile: PreferenceProfile;
-  mode: "ai_rakuten" | "ai_fallback" | "simulation";
+  mode: "ai_rakuten" | "rakuten_live" | "ai_fallback" | "simulation";
   notice?: string;
 }
 

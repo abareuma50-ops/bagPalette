@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Heart, Palette, Sparkles } from "lucide-react";
+import { Heart, KeyRound, Palette, Sparkles, X } from "lucide-react";
 import {
   BagItem,
   INITIAL_PREFERENCE_PROFILE,
@@ -20,6 +20,7 @@ const STORAGE_KEYS = {
   FAVORITES: "favoriteBags",
   PROFILE: "preferenceProfile",
   FILTERS: "bagPalette_filters",
+  API_KEYS: "bagPalette_apiKeys",
 };
 
 const DEFAULT_FILTERS: SearchFilters = {
@@ -41,6 +42,14 @@ export function BagPaletteApp() {
     INITIAL_PREFERENCE_PROFILE
   );
   const [userMemo, setUserMemo] = useState<string>("");
+  const [apiKeys, setApiKeys] = useState<{
+    geminiApiKey: string;
+    rakutenAppId: string;
+  }>({ geminiApiKey: "", rakutenAppId: "" });
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [paletteMode, setPaletteMode] = useState<
+    PaletteApiResponse["mode"] | undefined
+  >(undefined);
 
   const [currentBags, setCurrentBags] = useState<BagItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -68,6 +77,9 @@ export function BagPaletteApp() {
 
       const savedFilters = localStorage.getItem(STORAGE_KEYS.FILTERS);
       if (savedFilters) setFilters(JSON.parse(savedFilters));
+
+      const savedKeys = localStorage.getItem(STORAGE_KEYS.API_KEYS);
+      if (savedKeys) setApiKeys(JSON.parse(savedKeys));
     } catch (e) {
       console.warn("Failed to hydrate localStorage:", e);
     } finally {
@@ -132,6 +144,8 @@ export function BagPaletteApp() {
           rejectedBagsFromPreviousRound: rejectedFromPrev,
           currentProfile: preferenceProfile,
           userMemo,
+          apiKeys:
+            apiKeys.geminiApiKey || apiKeys.rakutenAppId ? apiKeys : undefined,
         };
 
         const res = await fetch("/api/palette", {
@@ -147,6 +161,7 @@ export function BagPaletteApp() {
         const data = (await res.json()) as PaletteApiResponse;
         setCurrentBags(data.bags);
         setPreferenceProfile(data.updatedProfile);
+        setPaletteMode(data.mode);
         setSelectedIds([]);
         setNotice(data.notice);
 
@@ -178,6 +193,7 @@ export function BagPaletteApp() {
       excludedModelNames,
       preferenceProfile,
       userMemo,
+      apiKeys,
     ]
   );
 
@@ -285,6 +301,19 @@ export function BagPaletteApp() {
                 </span>
               )}
             </button>
+            <button
+              id="open-api-settings-btn"
+              type="button"
+              onClick={() => setShowKeyModal(true)}
+              title="APIキー設定（楽天・Gemini）"
+              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                apiKeys.rakutenAppId || apiKeys.geminiApiKey
+                  ? "bg-white text-[#C8556F] shadow-sm"
+                  : "text-[#8E6D77] hover:bg-white/60"
+              }`}
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+            </button>
           </nav>
         </div>
       </header>
@@ -315,6 +344,7 @@ export function BagPaletteApp() {
             userMemo={userMemo}
             isLoading={isLoading}
             notice={notice}
+            paletteMode={paletteMode}
             onToggleSelect={handleToggleSelect}
             onToggleFavorite={handleToggleFavorite}
             onNextRound={handleNextRound}
@@ -323,6 +353,79 @@ export function BagPaletteApp() {
           />
         )}
       </main>
+
+      {/* Optional API Key Modal */}
+      {showKeyModal && (
+        <div className="fixed inset-0 z-50 bg-[#4A353B]/35 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-[24px] bg-[#FFFDFD] border border-[#E8D5E2] p-5 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#4A353B] flex items-center gap-1.5">
+                <KeyRound className="w-4 h-4 text-[#E87A90]" />
+                <span>APIキー設定（任意）</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowKeyModal(false)}
+                className="w-7 h-7 rounded-full bg-[#F7E8EE] flex items-center justify-center text-[#7D636B]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-[11px] text-[#7D636B] leading-relaxed">
+              楽天市場の公式APIやGemini 3.5 Flashを使う場合に入力してください（端末のブラウザ内にのみ保存されます）。
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-[#5E444B] mb-1">
+                  楽天アプリケーションID（RAKUTEN_APP_ID）
+                </label>
+                <input
+                  type="text"
+                  value={apiKeys.rakutenAppId}
+                  onChange={(e) =>
+                    setApiKeys((prev) => ({
+                      ...prev,
+                      rakutenAppId: e.target.value,
+                    }))
+                  }
+                  placeholder="例: 10xxxxxxxxxxxxxxx"
+                  className="w-full px-3 py-2 rounded-xl border border-[#E8D5E2] text-xs focus:outline-none focus:border-[#E87A90]"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-[#5E444B] mb-1">
+                  Gemini APIキー（GEMINI_API_KEY）
+                </label>
+                <input
+                  type="password"
+                  value={apiKeys.geminiApiKey}
+                  onChange={(e) =>
+                    setApiKeys((prev) => ({
+                      ...prev,
+                      geminiApiKey: e.target.value,
+                    }))
+                  }
+                  placeholder="AIza..."
+                  className="w-full px-3 py-2 rounded-xl border border-[#E8D5E2] text-xs focus:outline-none focus:border-[#E87A90]"
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.setItem(
+                  STORAGE_KEYS.API_KEYS,
+                  JSON.stringify(apiKeys)
+                );
+                setShowKeyModal(false);
+              }}
+              className="w-full py-2.5 rounded-full bg-[#E87A90] text-white text-xs font-bold shadow-sm hover:brightness-105"
+            >
+              保存して閉じる
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

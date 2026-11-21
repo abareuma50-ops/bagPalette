@@ -4,12 +4,15 @@ import {
   BUDGET_OPTIONS,
   BagItem,
   BudgetRange,
+  COLOR_SWATCHES,
+  ColorOption,
   ConfidenceLevel,
   PaletteApiRequest,
   PaletteApiResponse,
   PreferenceProfile,
   SIZE_OPTIONS,
   SearchFilters,
+  SizeCategory,
 } from "@/types/bag";
 
 function normalizeName(brand: string, modelName: string): string {
@@ -70,30 +73,37 @@ export function simulateProfileUpdate(
   const newAvoided: string[] = [];
 
   for (const bag of selectedBagsFromPreviousRound) {
-    if (bag.material) {
-      if (bag.material.includes("革") || bag.material.includes("レザー")) {
-        newMaterials.push("本革・上質レザー");
-      } else if (bag.material.includes("ナイロン") || bag.material.includes("ポリエステル")) {
-        newMaterials.push("軽量ナイロン・撥水");
-      } else if (bag.material.includes("キャンバス")) {
-        newMaterials.push("キャンバス");
-      } else if (bag.material.includes("合皮") || bag.material.includes("PVC")) {
-        newMaterials.push("お手入れ楽な合皮/PVC");
-      } else {
-        newMaterials.push(bag.material);
-      }
+    const text = `${bag.material} ${bag.modelName} ${bag.description}`;
+    if (text.includes("革") || text.includes("レザー")) {
+      newMaterials.push("本革・レザー");
+    } else if (text.includes("ナイロン") || text.includes("ポリエステル")) {
+      newMaterials.push("軽量ナイロン・撥水");
+    } else if (text.includes("キャンバス")) {
+      newMaterials.push("キャンバス");
+    } else if (text.includes("合皮") || text.includes("PVC") || text.includes("PU")) {
+      newMaterials.push("お手入れ楽な合皮/PVC");
     }
+    if (text.includes("2way") || text.includes("2WAY")) newForms.push("2WAY");
+    if (text.includes("自立")) newForms.push("自立する");
+    if (text.includes("軽")) newForms.push("軽量");
+    if (text.includes("A4") || text.includes("PC")) newForms.push("A4/PC対応");
+    if (text.includes("ショルダー")) newForms.push("ショルダー");
+    if (text.includes("トート")) newForms.push("トート");
     for (const tag of bag.styleTags) {
-      newForms.push(tag);
+      if (tag !== "楽天市場" && tag !== "実在モデル") {
+        newForms.push(tag);
+      }
     }
   }
 
-  // Extract avoided tendencies from rejected items not appearing in selected
   const selectedTags = new Set(
     selectedBagsFromPreviousRound.flatMap((b) => b.styleTags)
   );
   for (const bag of rejectedBagsFromPreviousRound) {
-    if (bag.price > 45000 && !selectedBagsFromPreviousRound.some((s) => s.price > 45000)) {
+    if (
+      bag.price > 45000 &&
+      !selectedBagsFromPreviousRound.some((s) => s.price > 45000)
+    ) {
       newAvoided.push("高価格帯");
     }
     for (const tag of bag.styleTags) {
@@ -104,14 +114,15 @@ export function simulateProfileUpdate(
     }
   }
 
-  // Incorporate userMemo hints
   const memo = userMemo.trim();
   if (memo) {
     if (memo.includes("カジュアル")) newForms.push("カジュアル");
-    if (memo.includes("きれいめ") || memo.includes("通勤")) newForms.push("きれいめ");
+    if (memo.includes("きれいめ") || memo.includes("通勤"))
+      newForms.push("きれいめ");
     if (memo.includes("自立")) newForms.push("自立する");
     if (memo.includes("軽")) newForms.push("軽量");
-    if (memo.includes("本革") || memo.includes("レザー")) newMaterials.push("本革・上質レザー");
+    if (memo.includes("本革") || memo.includes("レザー"))
+      newMaterials.push("本革・レザー");
     if (memo.includes("ナイロン")) newMaterials.push("軽量ナイロン・撥水");
     if (memo.includes("2WAY")) newForms.push("2WAY");
   }
@@ -132,7 +143,6 @@ export function simulateProfileUpdate(
     4
   );
 
-  // Confidence score calculation
   const delta = selectedBagsFromPreviousRound.length > 0 ? 18 : 6;
   const confidenceScore = Math.min(
     96,
@@ -140,7 +150,6 @@ export function simulateProfileUpdate(
   );
   const confidenceLevel = computeConfidenceLevel(confidenceScore);
 
-  // Build natural Japanese summary
   const matText =
     preferredMaterials.length > 0
       ? preferredMaterials.slice(0, 2).join("・")
@@ -190,6 +199,47 @@ export function simulateProfileUpdate(
   };
 }
 
+const SIZE_SEARCH_TERMS: Record<SizeCategory, string> = {
+  mini: "レディース ミニショルダー スマホポーチ",
+  small: "レディース トートバッグ ミニ 普段使い",
+  medium: "レディース トートバッグ A4 通勤",
+  large: "レディース ボストンバッグ 大容量 旅行",
+};
+
+const COLOR_SEARCH_TERMS: Record<ColorOption, string> = {
+  black: "ブラック",
+  gray: "グレー",
+  navy: "ネイビー",
+  beige_khaki: "ベージュ",
+  brown_camel: "キャメル",
+  white_ivory: "アイボリー",
+  pastel_other: "ピンク",
+};
+
+function buildDynamicSearchKeyword(
+  filters: SearchFilters,
+  profile: PreferenceProfile,
+  userMemo: string,
+  roundCount: number
+): string {
+  const parts: string[] = [SIZE_SEARCH_TERMS[filters.size] ?? "レディース バッグ"];
+
+  if (filters.colors.length > 0) {
+    const colorIdx = roundCount % filters.colors.length;
+    parts.push(COLOR_SEARCH_TERMS[filters.colors[colorIdx]]);
+  }
+
+  if (userMemo.trim()) {
+    parts.push(userMemo.trim().slice(0, 24));
+  } else if (profile.preferredMaterials.length > 0) {
+    const mat = profile.preferredMaterials[0];
+    if (mat.includes("革")) parts.push("本革");
+    else if (mat.includes("ナイロン")) parts.push("ナイロン");
+  }
+
+  return parts.join(" ");
+}
+
 function scoreBagForUser(
   bag: BagItem,
   filters: SearchFilters,
@@ -204,7 +254,6 @@ function scoreBagForUser(
     score += 25;
   }
 
-  // Match learned preferences
   for (const mat of profile.preferredMaterials) {
     if (
       bag.material.includes(mat) ||
@@ -220,18 +269,23 @@ function scoreBagForUser(
     }
   }
 
-  // Match userMemo keywords
   const memo = userMemo.trim().toLowerCase();
   if (memo) {
-    const haystack = `${bag.brand} ${bag.modelName} ${bag.material} ${bag.styleTags.join(" ")} ${bag.description}`.toLowerCase();
+    const haystack =
+      `${bag.brand} ${bag.modelName} ${bag.material} ${bag.styleTags.join(" ")} ${bag.description}`.toLowerCase();
     const keywords = memo.split(/[\s、,。]+/).filter((k) => k.length >= 2);
     for (const kw of keywords) {
       if (haystack.includes(kw)) score += 18;
     }
-    if (memo.includes("カジュアル") && haystack.includes("カジュアル")) score += 15;
+    if (memo.includes("カジュアル") && haystack.includes("カジュアル"))
+      score += 15;
     if (memo.includes("きれいめ") && haystack.includes("きれいめ")) score += 15;
     if (memo.includes("自立") && haystack.includes("自立")) score += 18;
-    if (memo.includes("軽") && (haystack.includes("軽") || haystack.includes("超軽量"))) score += 15;
+    if (
+      memo.includes("軽") &&
+      (haystack.includes("軽") || haystack.includes("超軽量"))
+    )
+      score += 15;
   }
 
   return score;
@@ -259,7 +313,6 @@ export function pickFallbackBags(
     };
   }
 
-  // Sort unseen bags by relevance score (with small deterministic tiebreaker)
   const scored = unseen
     .map((bag) => ({
       bag,
@@ -267,7 +320,6 @@ export function pickFallbackBags(
     }))
     .sort((a, b) => b.score - a.score);
 
-  // Try to diversify brands/colors in the 4 picks when possible
   const picked: BagItem[] = [];
   const usedBrands = new Set<string>();
 
@@ -285,22 +337,7 @@ export function pickFallbackBags(
     }
   }
 
-  const strictMatches = picked.filter(
-    (b) =>
-      b.size === filters.size &&
-      matchesBudget(b.price, filters.budget) &&
-      (filters.colors.length === 0 || filters.colors.includes(b.color))
-  );
-
-  let notice: string | undefined;
-  if (picked.length < count) {
-    notice = `未表示の候補が残り${picked.length}点となりました。`;
-  } else if (strictMatches.length === 0 && unseen.length >= count) {
-    notice =
-      "指定条件に合う未表示アイテムが少なくなったため、近いテイストの別候補も混ぜて表示しています。";
-  }
-
-  return { bags: picked, notice };
+  return { bags: picked };
 }
 
 interface RakutenItem {
@@ -314,21 +351,66 @@ interface RakutenItem {
   };
 }
 
+function mapRakutenItemToBag(
+  item: NonNullable<RakutenItem["Item"]>,
+  filters: SearchFilters,
+  brandOverride?: string,
+  modelOverride?: string
+): BagItem | null {
+  if (!item.itemCode || !item.itemName || !item.itemUrl) return null;
+  const rawImg = item.mediumImageUrls?.[0]?.imageUrl;
+  if (!rawImg) return null;
+
+  const imageUrl = rawImg
+    .replace(/^http:\/\//, "https://")
+    .replace(/\?_ex=\d+x\d+/, "?_ex=500x500");
+
+  const price = item.itemPrice ?? 0;
+  const brand = brandOverride || item.shopName || "楽天市場";
+  const modelName = modelOverride || item.itemName.slice(0, 48);
+  const q = encodeURIComponent(`${brand} ${modelName}`);
+
+  return {
+    id: item.itemCode,
+    brand,
+    modelName,
+    price,
+    priceFormatted: `¥${price.toLocaleString("ja-JP")}`,
+    imageUrl,
+    productUrl: item.itemUrl,
+    rakutenSearchUrl: `https://search.rakuten.co.jp/search/mall/${q}/`,
+    googleSearchUrl: `https://www.google.com/search?tbm=shop&q=${q}`,
+    size: filters.size,
+    color: filters.colors[0] ?? "black",
+    colorLabel:
+      COLOR_SWATCHES.find((c) => c.value === filters.colors[0])?.label ??
+      "セレクトカラー",
+    material: item.itemName.includes("本革") || item.itemName.includes("レザー")
+      ? "本革・レザー"
+      : item.itemName.includes("ナイロン")
+        ? "ナイロン"
+        : "商品ページ参照",
+    styleTags: ["楽天市場", item.shopName ? item.shopName.slice(0, 12) : "実売商品"],
+    description: item.itemName.slice(0, 70),
+    dimensions: "ショップ記載サイズ",
+    weight: "-",
+    source: "rakuten",
+  };
+}
+
 async function searchRakutenForBag(
+  appId: string,
   brand: string,
   modelName: string,
   filters: SearchFilters,
   excludedIds: Set<string>,
   excludedNames: Set<string>
 ): Promise<BagItem | null> {
-  const appId = process.env.RAKUTEN_APP_ID;
-  if (!appId) return null;
-
   const budgetOpt = BUDGET_OPTIONS.find((b) => b.value === filters.budget);
   const params = new URLSearchParams({
     applicationId: appId,
     keyword: `${brand} ${modelName} バッグ`,
-    hits: "4",
+    hits: "5",
     imageFlag: "1",
     format: "json",
   });
@@ -346,48 +428,193 @@ async function searchRakutenForBag(
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { Items?: RakutenItem[] };
-    const items = data.Items ?? [];
-
-    for (const entry of items) {
+    for (const entry of data.Items ?? []) {
       const item = entry.Item;
-      if (!item || !item.itemCode || !item.itemName || !item.itemUrl) continue;
-      if (excludedIds.has(item.itemCode)) continue;
+      if (!item?.itemCode || excludedIds.has(item.itemCode)) continue;
       if (excludedNames.has(normalizeName(brand, modelName))) continue;
-
-      const rawImg = item.mediumImageUrls?.[0]?.imageUrl;
-      if (!rawImg) continue;
-      const imageUrl = rawImg
-        .replace(/^http:\/\//, "https://")
-        .replace(/\?_ex=\d+x\d+/, "?_ex=500x500");
-
-      const price = item.itemPrice ?? 0;
-      const q = encodeURIComponent(`${brand} ${modelName}`);
-
-      return {
-        id: item.itemCode,
-        brand,
-        modelName,
-        price,
-        priceFormatted: `¥${price.toLocaleString("ja-JP")}`,
-        imageUrl,
-        productUrl: item.itemUrl,
-        rakutenSearchUrl: `https://search.rakuten.co.jp/search/mall/${q}/`,
-        googleSearchUrl: `https://www.google.com/search?tbm=shop&q=${q}`,
-        size: filters.size,
-        color: filters.colors[0] ?? "black",
-        colorLabel: "セレクトカラー",
-        material: "商品ページ参照",
-        styleTags: ["実在モデル", "楽天市場"],
-        description: item.itemName.slice(0, 60),
-        dimensions: "ショップ記載サイズ",
-        weight: "-",
-        source: "rakuten",
-      };
+      const mapped = mapRakutenItemToBag(item, filters, brand, modelName);
+      if (mapped) return mapped;
     }
   } catch {
     return null;
   }
   return null;
+}
+
+async function searchRakutenApiDynamic(
+  appId: string,
+  keyword: string,
+  filters: SearchFilters,
+  excludedIds: Set<string>,
+  excludedNames: Set<string>,
+  page: number
+): Promise<BagItem[]> {
+  const budgetOpt = BUDGET_OPTIONS.find((b) => b.value === filters.budget);
+  const params = new URLSearchParams({
+    applicationId: appId,
+    keyword,
+    hits: "24",
+    page: String(page),
+    imageFlag: "1",
+    format: "json",
+  });
+  if (budgetOpt?.min && budgetOpt.min > 0) {
+    params.set("minPrice", String(budgetOpt.min));
+  }
+  if (budgetOpt?.max) {
+    params.set("maxPrice", String(budgetOpt.max));
+  }
+
+  try {
+    const res = await fetch(
+      `https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601?${params.toString()}`,
+      { signal: AbortSignal.timeout(6000) }
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { Items?: RakutenItem[] };
+    const results: BagItem[] = [];
+    const usedShops = new Set<string>();
+
+    for (const entry of data.Items ?? []) {
+      if (results.length >= 4) break;
+      const item = entry.Item;
+      if (!item?.itemCode || !item.itemName) continue;
+      if (excludedIds.has(item.itemCode)) continue;
+      const shop = item.shopName ?? "";
+      if (usedShops.has(shop) && (data.Items?.length ?? 0) > 8) continue;
+
+      const mapped = mapRakutenItemToBag(item, filters);
+      if (!mapped) continue;
+      if (excludedNames.has(normalizeName(mapped.brand, mapped.modelName))) {
+        continue;
+      }
+      results.push(mapped);
+      usedShops.add(shop);
+      excludedIds.add(mapped.id);
+      excludedNames.add(normalizeName(mapped.brand, mapped.modelName));
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Live Rakuten Search fallback when RAKUTEN_APP_ID is not configured.
+ * Parses Schema.org JSON-LD (ItemList / Product) from search.rakuten.co.jp SSR HTML.
+ */
+async function searchRakutenPublicLive(
+  keyword: string,
+  filters: SearchFilters,
+  excludedIds: Set<string>,
+  excludedNames: Set<string>,
+  page: number
+): Promise<BagItem[]> {
+  const budgetOpt = BUDGET_OPTIONS.find((b) => b.value === filters.budget);
+  const url = new URL(
+    `https://search.rakuten.co.jp/search/mall/${encodeURIComponent(keyword)}/`
+  );
+  if (budgetOpt?.min && budgetOpt.min > 0) {
+    url.searchParams.set("min", String(budgetOpt.min));
+  }
+  if (budgetOpt?.max) {
+    url.searchParams.set("max", String(budgetOpt.max));
+  }
+  if (page > 1) {
+    url.searchParams.set("p", String(page));
+  }
+
+  try {
+    const res = await fetch(url.toString(), {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "ja,en;q=0.9",
+      },
+      signal: AbortSignal.timeout(5500),
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+
+    const results: BagItem[] = [];
+    const jsonLdMatches = html.matchAll(
+      /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+    );
+
+    for (const match of jsonLdMatches) {
+      if (results.length >= 4) break;
+      try {
+        const parsed = JSON.parse(match[1]);
+        const list = Array.isArray(parsed) ? parsed : [parsed];
+        for (const node of list) {
+          const items =
+            node?.["@type"] === "ItemList" && Array.isArray(node.itemListElement)
+              ? node.itemListElement.map((el: { item?: unknown }) => el.item ?? el)
+              : node?.["@type"] === "Product"
+                ? [node]
+                : [];
+
+          for (const prod of items) {
+            if (results.length >= 4) break;
+            const itemUrl: string | undefined = prod?.url || prod?.offers?.url;
+            const name: string | undefined = prod?.name;
+            const rawImage = Array.isArray(prod?.image)
+              ? prod.image[0]
+              : prod?.image;
+            const price = Number(prod?.offers?.price ?? 0);
+
+            if (!itemUrl || !name || !rawImage || !price) continue;
+            if (!matchesBudget(price, filters.budget)) continue;
+
+            const id = `rakuten-live-${Buffer.from(itemUrl).toString("base64").slice(0, 20)}`;
+            if (excludedIds.has(id)) continue;
+
+            const brand =
+              prod?.brand?.name ||
+              (itemUrl.match(/item\.rakuten\.co\.jp\/([^/]+)/)?.[1] ?? "楽天市場");
+            const modelName = String(name).slice(0, 48);
+            if (excludedNames.has(normalizeName(brand, modelName))) continue;
+
+            const q = encodeURIComponent(modelName);
+            results.push({
+              id,
+              brand,
+              modelName,
+              price,
+              priceFormatted: `¥${price.toLocaleString("ja-JP")}`,
+              imageUrl: String(rawImage).replace(/^http:\/\//, "https://"),
+              productUrl: itemUrl,
+              rakutenSearchUrl: `https://search.rakuten.co.jp/search/mall/${q}/`,
+              googleSearchUrl: `https://www.google.com/search?tbm=shop&q=${q}`,
+              size: filters.size,
+              color: filters.colors[0] ?? "black",
+              colorLabel:
+                COLOR_SWATCHES.find((c) => c.value === filters.colors[0])
+                  ?.label ?? "セレクトカラー",
+              material: name.includes("本革") || name.includes("レザー")
+                ? "本革・レザー"
+                : name.includes("ナイロン")
+                  ? "ナイロン"
+                  : "商品ページ参照",
+              styleTags: ["楽天市場", "ライブ検索"],
+              description: String(name).slice(0, 70),
+              dimensions: "ショップ記載サイズ",
+              weight: "-",
+              source: "rakuten",
+            });
+            excludedIds.add(id);
+            excludedNames.add(normalizeName(brand, modelName));
+          }
+        }
+      } catch {
+        // ignore malformed JSON-LD block
+      }
+    }
+
+    return results;
+  } catch {
+    return [];
+  }
 }
 
 interface GeminiCandidate {
@@ -416,7 +643,6 @@ export async function generatePaletteResponse(
     req.excludedModelNames.map((n) => n.toLowerCase().trim())
   );
 
-  // Always add previous round items to excluded sets just in case
   for (const b of [
     ...req.selectedBagsFromPreviousRound,
     ...req.rejectedBagsFromPreviousRound,
@@ -425,9 +651,12 @@ export async function generatePaletteResponse(
     excludedNames.add(normalizeName(b.brand, b.modelName));
   }
 
-  const geminiKey = process.env.GEMINI_API_KEY;
-  const rakutenKey = process.env.RAKUTEN_APP_ID;
+  const geminiKey =
+    req.apiKeys?.geminiApiKey?.trim() || process.env.GEMINI_API_KEY;
+  const rakutenKey =
+    req.apiKeys?.rakutenAppId?.trim() || process.env.RAKUTEN_APP_ID;
 
+  // 1) Gemini 3.5 Flash + Google Search Grounding + Rakuten API
   if (geminiKey) {
     try {
       const ai = new GoogleGenAI({ apiKey: geminiKey });
@@ -528,6 +757,7 @@ ${Array.from(excludedNames).slice(0, 60).join(", ") || "なし"}
               .slice(0, 4)
               .map((c) =>
                 searchRakutenForBag(
+                  rakutenKey,
                   c.brand,
                   c.modelName,
                   req.filters,
@@ -549,6 +779,23 @@ ${Array.from(excludedNames).slice(0, 60).join(", ") || "なし"}
               excludedNames.add(normalizeName(hit.brand, hit.modelName));
             }
           }
+        }
+
+        if (resolvedBags.length < 4) {
+          const keyword = buildDynamicSearchKeyword(
+            req.filters,
+            updatedProfile,
+            req.userMemo,
+            updatedProfile.roundCount
+          );
+          const liveHits = await searchRakutenPublicLive(
+            keyword,
+            req.filters,
+            excludedIds,
+            excludedNames,
+            (updatedProfile.roundCount % 8) + 1
+          );
+          resolvedBags.push(...liveHits.slice(0, 4 - resolvedBags.length));
         }
 
         if (resolvedBags.length < 4) {
@@ -574,21 +821,79 @@ ${Array.from(excludedNames).slice(0, 60).join(", ") || "なし"}
     }
   }
 
-  // Fallback simulation mode (works with zero API keys!)
+  // 2) Update profile locally
   const updatedProfile = simulateProfileUpdate(req);
-  const { bags, notice } = pickFallbackBags(
+  const keyword = buildDynamicSearchKeyword(
+    req.filters,
+    updatedProfile,
+    req.userMemo,
+    updatedProfile.roundCount
+  );
+  const page = (updatedProfile.roundCount % 10) + 1;
+
+  // 3) If RAKUTEN_APP_ID is set (even without Gemini), search millions of real Rakuten items directly!
+  if (rakutenKey) {
+    const apiHits = await searchRakutenApiDynamic(
+      rakutenKey,
+      keyword,
+      req.filters,
+      excludedIds,
+      excludedNames,
+      page
+    );
+    if (apiHits.length >= 4) {
+      return {
+        bags: apiHits.slice(0, 4),
+        updatedProfile,
+        mode: "ai_rakuten",
+      };
+    }
+    const fallback = pickFallbackBags(
+      req.filters,
+      excludedIds,
+      excludedNames,
+      updatedProfile,
+      req.userMemo,
+      4 - apiHits.length
+    );
+    return {
+      bags: [...apiHits, ...fallback.bags].slice(0, 4),
+      updatedProfile,
+      mode: apiHits.length > 0 ? "ai_rakuten" : "simulation",
+      notice: fallback.notice,
+    };
+  }
+
+  // 4) Even without API keys, try live Rakuten public search on the server!
+  const liveHits = await searchRakutenPublicLive(
+    keyword,
+    req.filters,
+    excludedIds,
+    excludedNames,
+    page
+  );
+  if (liveHits.length >= 4) {
+    return {
+      bags: liveHits.slice(0, 4),
+      updatedProfile,
+      mode: "rakuten_live",
+    };
+  }
+
+  // 5) Fill any remaining slots from local curated real-product dataset
+  const fallback = pickFallbackBags(
     req.filters,
     excludedIds,
     excludedNames,
     updatedProfile,
     req.userMemo,
-    4
+    4 - liveHits.length
   );
 
   return {
-    bags,
+    bags: [...liveHits, ...fallback.bags].slice(0, 4),
     updatedProfile,
-    mode: "simulation",
-    notice,
+    mode: liveHits.length > 0 ? "rakuten_live" : "simulation",
+    notice: fallback.notice,
   };
 }
