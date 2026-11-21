@@ -165,6 +165,14 @@ export function PaletteGrid({
                     <img
                       src={bag.imageUrl}
                       alt={`${bag.brand} ${bag.modelName}`}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.dataset.fallbackApplied) {
+                          target.dataset.fallbackApplied = "1";
+                          target.src = `/bags/${bag.id}.svg`;
+                        }
+                      }}
                       className="max-h-full max-w-full object-contain p-1 transition-transform duration-300"
                     />
                     {isSelected && (

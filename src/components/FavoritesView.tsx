@@ -81,11 +81,19 @@ export function FavoritesView({
               className="rounded-2xl bg-[#FFFDFD] border border-[#EAD9E2] p-3 flex gap-3 items-center shadow-sm"
             >
               <div className="w-20 h-20 rounded-xl bg-[#FDF6F8] border border-[#F3E6EE] flex items-center justify-center shrink-0 p-1">
-                <img
-                  src={bag.imageUrl}
-                  alt={`${bag.brand} ${bag.modelName}`}
-                  className="max-h-full max-w-full object-contain"
-                />
+                  <img
+                    src={bag.imageUrl}
+                    alt={`${bag.brand} ${bag.modelName}`}
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (!target.dataset.fallbackApplied) {
+                        target.dataset.fallbackApplied = "1";
+                        target.src = `/bags/${bag.id}.svg`;
+                      }
+                    }}
+                    className="max-h-full max-w-full object-contain"
+                  />
               </div>
 
               <div className="flex-1 min-w-0 space-y-1">
